@@ -34,7 +34,14 @@ for NODE_ID in "${NODE_IDS[@]}"; do
       nexus-network start --node-id '"$NODE_ID"'
       exec bash
     '
+    echo "🔹 screen -r nexus-$NODE_ID"
   else
+    # Hapus container jika sudah ada
+    if docker ps -a --format "{{.Names}}" | grep -q "nexus-$NODE_ID"; then
+      echo "⚠️ Container nexus-$NODE_ID sudah ada, menghapus..."
+      docker rm -f nexus-$NODE_ID
+    fi
+
     if ! command -v docker &>/dev/null; then
       echo "📦 Docker belum ada, memasang Docker..."
       apt update && apt install -y docker.io
@@ -50,12 +57,10 @@ for NODE_ID in "${NODE_IDS[@]}"; do
       nexus-network start --node-id '"$NODE_ID"'
       exec bash
     '
+    echo "🐳 Node $NODE_ID sedang berjalan di dalam container docker: nexus-$NODE_ID"
   fi
 done
 
-# Info selesai
+# Info akhir
 echo ""
-echo "✅ Semua Node Nexus sedang dijalankan:"
-for NODE_ID in "${NODE_IDS[@]}"; do
-  echo "🔹 screen -r nexus-$NODE_ID"
-done
+echo "✅ Semua Node Nexus telah dijalankan."

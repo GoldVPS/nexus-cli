@@ -14,7 +14,7 @@ RESET='\033[0m'
 function show_header() {
     clear
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "           Nexus Ubuntu 24.04 Node"
+    echo -e " GOLDVPS AUTO INSTALL Nexus Ubuntu 24.04 Node"
     echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 

@@ -37,22 +37,8 @@ function check_docker() {
     fi
 }
 
-# === Periksa & install Rust ===
-function check_rust() {
-    if ! command -v cargo >/dev/null 2>&1; then
-        echo -e "${YELLOW}Rust belum terinstall. Menginstal Rust...${RESET}"
-        curl https://sh.rustup.rs -sSf | bash -s -- -y
-        export PATH="$HOME/.cargo/bin:$PATH"
-        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
-        source ~/.bashrc
-    else
-        echo -e "${GREEN}✔ Rust sudah terinstall.${RESET}"
-    fi
-}
-
 # === Build Docker Image ===
 function build_image() {
-    check_rust
     WORKDIR=$(mktemp -d)
     cd "$WORKDIR"
 
@@ -60,13 +46,8 @@ function build_image() {
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PROVER_ID_FILE=/root/.nexus/node-id
-RUN apt-get update && apt-get install -y curl wget git screen bash build-essential pkg-config libssl-dev net-tools iproute2 procps \
-    && curl https://sh.rustup.rs -sSf | bash -s -- -y \
-    && export PATH="/root/.cargo/bin:\$PATH" \
-    && git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli \
-    && cd /root/nexus-cli/clients/cli \
-    && /root/.cargo/bin/cargo build --release \
-    && ln -sf /root/nexus-cli/clients/cli/target/release/nexus-cli /usr/local/bin/nexus-network
+RUN apt-get update && apt-get install -y curl screen bash net-tools iproute2 procps && rm -rf /var/lib/apt/lists/*
+RUN curl -sSL https://cli.nexus.xyz/ | sh && ln -sf /root/.nexus/bin/nexus-network /usr/local/bin/nexus-network
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
@@ -94,17 +75,8 @@ EOF
 # === Jalankan node secara native ===
 function run_native_node() {
     local node_id=$1
-    check_rust
-    if [ ! -f "$HOME/.nexus/bin/nexus-network" ]; then
-        git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli
-        cd /root/nexus-cli/clients/cli
-        cargo build --release
-        mkdir -p "$HOME/.nexus/bin"
-        cp target/release/nexus-cli "$HOME/.nexus/bin/nexus-network"
-        export PATH="$HOME/.nexus/bin:$PATH"
-    fi
     local screen_name="nexus-${node_id}"
-    screen -dmS "$screen_name" bash -c "nexus-network start --node-id $node_id && exec bash"
+    screen -dmS "$screen_name" bash -c "curl -sSL https://cli.nexus.xyz/ | sh && export PATH=\$HOME/.nexus/bin:\$PATH && sleep 5 && nexus-network start --node-id $node_id && exec bash"
     echo -e "${GREEN}Node $node_id dijalankan di screen: screen -r $screen_name${RESET}"
 }
 
@@ -178,18 +150,6 @@ function uninstall_all_nodes() {
     read -p "Tekan enter..." dummy
 }
 
-# === Update Semua Node ===
-function update_all_nodes() {
-    echo -e "${YELLOW}⏳ Update semua node...${RESET}"
-    build_image
-    local all_nodes=($(get_all_nodes))
-    for node_id in "${all_nodes[@]}"; do
-        run_container_node "$node_id"
-    done
-    echo -e "${GREEN}✔ Semua node berhasil di-update.${RESET}"
-    read -p "Tekan enter..." dummy
-}
-
 # === Tambah & jalankan node ===
 function add_node() {
     check_docker
@@ -214,17 +174,15 @@ while true; do
     echo -e "${GREEN} 2.${RESET} 📊 Lihat Status Semua Node"
     echo -e "${GREEN} 3.${RESET} 🧾 Lihat Log Node"
     echo -e "${GREEN} 4.${RESET} ❌ Hapus Semua Node"
-    echo -e "${GREEN} 5.${RESET} 🔄 Update Semua Node"
-    echo -e "${GREEN} 6.${RESET} 🚪 Keluar"
+    echo -e "${GREEN} 5.${RESET} 🚪 Keluar"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    read -rp "Pilih menu (1-6): " pilihan
+    read -rp "Pilih menu (1-5): " pilihan
     case $pilihan in
         1) add_node ;;
         2) list_nodes ;;
         3) view_logs ;;
         4) uninstall_all_nodes ;;
-        5) update_all_nodes ;;
-        6) exit 0 ;;
+        5) exit 0 ;;
         *) echo "Pilihan tidak valid."; sleep 2 ;;
     esac
 done

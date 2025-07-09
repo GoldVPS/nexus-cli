@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Cek apakah dijalankan langsung di shell
+if [ ! -t 0 ]; then
+  echo "❌ Script ini tidak mendukung input interaktif jika dijalankan via pipe (|)."
+  echo "💡 Gunakan: curl -O https://raw.githubusercontent.com/GoldVPS/nexus-cli/main/nexus.sh && bash nexus.sh"
+  exit 1
+fi
+
+# Input Node ID manual
 echo "🧠 Masukkan satu atau lebih Node ID Nexus (pisahkan dengan spasi):"
 read -r -a NODE_IDS
 

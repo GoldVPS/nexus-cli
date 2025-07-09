@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# === Konfigurasi dasar ===
-LOG_DIR="/root/nexus_logs"
-
 # === Warna terminal ===
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -14,100 +11,105 @@ RESET='\033[0m'
 function show_header() {
     clear
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e " GOLDVPS AUTO INSTALL Nexus Ubuntu 24.04 Node"
+    echo -e "           Nexus CLI Node Manager"
     echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
-# === Cek & install dependensi ===
-function check_dependencies() {
-    apt update
-    apt install -y curl screen git build-essential pkg-config libssl-dev
-}
-
-# === Install Nexus CLI ===
-function install_nexus_cli() {
-    if [ ! -f "$HOME/.nexus/bin/nexus-network" ]; then
-        echo -e "${YELLOW}🚀 Menginstall Nexus CLI...${RESET}"
-        curl -sSL https://cli.nexus.xyz/ | sh
-        echo 'export PATH="$HOME/.nexus/bin:$PATH"' >> ~/.bashrc
-        export PATH="$HOME/.nexus/bin:$PATH"
+# === Periksa screen ===
+function check_screen() {
+    if ! command -v screen >/dev/null 2>&1; then
+        echo -e "${YELLOW}Menginstal screen...${RESET}"
+        apt update && apt install -y screen
     fi
 }
 
-# === Update Nexus CLI ===
-function update_nexus_cli() {
-    echo -e "${YELLOW}🔄 Update Nexus CLI...${RESET}"
-    curl -sSL https://cli.nexus.xyz/ | sh
-    echo -e "${GREEN}✔ Nexus CLI berhasil di-update.${RESET}"
-    read -p "Tekan enter..."
-}
-
-# === Jalankan node ===
-function run_node() {
+# === Tambah & Jalankan Node ===
+function add_node() {
+    check_screen
     read -rp "Masukkan satu atau lebih NODE_ID (pisahkan spasi): " input
     [ -z "$input" ] && echo "NODE_ID wajib diisi." && sleep 2 && return
+
+    mkdir -p "$HOME/.nexus/nodes"
+
     for id in $input; do
-        local screen_name="nexus-${id}"
-        screen -dmS "$screen_name" bash -c "nexus-network start --node-id $id && exec bash"
-        echo -e "${GREEN}Node $id dijalankan di screen: screen -r $screen_name${RESET}"
+        screen -dmS "nexus-$id" bash -c "curl -sSL https://cli.nexus.xyz/ | sh && export PATH=\$HOME/.nexus/bin:\$PATH && sleep 5 && nexus-network start --node-id $id && exec bash"
+        touch "$HOME/.nexus/nodes/$id"
+        echo -e "${GREEN}Node $id dijalankan di screen: screen -r nexus-$id${RESET}"
     done
-    read -p "Tekan enter..."
+    read -p "Tekan enter..." dummy
 }
 
-# === Lihat screen aktif ===
+# === Daftar Node ===
 function list_nodes() {
     show_header
-    echo -e "${CYAN}📊 Daftar Node Berjalan (screen):${RESET}"
-    screen -ls | grep nexus || echo "Tidak ada node Nexus yang berjalan."
-    read -p "Tekan enter..."
+    echo -e "${CYAN}📊 Daftar Node Terdaftar:${RESET}"
+    local list=( $(ls $HOME/.nexus/nodes 2>/dev/null) )
+    for i in "${!list[@]}"; do
+        local id=${list[$i]}
+        local running=$(screen -ls | grep -q "nexus-$id" && echo "running" || echo "stopped")
+        echo "$((i+1)). Node ID: $id | Status: $running"
+    done
+    read -p "Tekan enter..." dummy
 }
 
-# === Lihat log dari screen ===
+# === Lihat Log Node ===
 function view_logs() {
-    screen -ls | grep nexus | awk '{print NR". "$1}'
-    read -rp "Pilih nomor screen (1-n): " num
-    screen_id=$(screen -ls | grep nexus | awk "NR==$num {print \$1}")
-    if [ -n "$screen_id" ]; then
-        screen -r "$screen_id"
-    else
-        echo "Tidak ditemukan."
+    local list=( $(ls $HOME/.nexus/nodes 2>/dev/null) )
+    echo "Pilih node untuk lihat log:"
+    for i in "${!list[@]}"; do
+        echo "$((i+1)). ${list[$i]}"
+    done
+    read -rp "Nomor: " choice
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice > 0 && choice <= ${#list[@]} )); then
+        screen -r "nexus-${list[$((choice-1))]}"
     fi
 }
 
-# === Hentikan semua screen nexus ===
-function stop_all_nodes() {
-    screen -ls | grep nexus | awk '{print $1}' | while read id; do
-        screen -S "$id" -X quit
+# === Hapus Semua Node ===
+function uninstall_all_nodes() {
+    echo -e "${YELLOW}Menghapus semua node...${RESET}"
+    pkill -f "nexus-network start" || true
+    rm -rf "$HOME/.nexus/nodes"
+    echo -e "${GREEN}✔ Semua node dihapus.${RESET}"
+    read -p "Tekan enter..." dummy
+}
+
+# === Update Nexus CLI dan Restart Node ===
+function update_cli() {
+    echo -e "${YELLOW}🔄 Update Nexus CLI...${RESET}"
+    pkill -f "nexus-network start" || true
+    sleep 3
+    rm -f "$HOME/.nexus/bin/nexus-network"
+    curl -sSL https://cli.nexus.xyz/ | sh
+    ln -sf "$HOME/.nexus/bin/nexus-cli" "$HOME/.nexus/bin/nexus-network"
+    echo -e "${GREEN}✔ Nexus CLI berhasil di-update.${RESET}"
+
+    local node_list=( $(ls "$HOME/.nexus/nodes" 2>/dev/null) )
+    for id in "${node_list[@]}"; do
+        echo -e "${CYAN}🔁 Restarting node $id...${RESET}"
+        screen -dmS "nexus-$id" bash -c "nexus-network start --node-id $id && exec bash"
     done
-    echo -e "${YELLOW}⚠ Semua screen node dihentikan.${RESET}"
-    read -p "Tekan enter..."
+    read -p "Tekan enter..." dummy
 }
 
 # === MENU UTAMA ===
-function main_menu() {
-    while true; do
-        show_header
-        echo -e "${GREEN} 1.${RESET} ➕ Jalankan Node"
-        echo -e "${GREEN} 2.${RESET} 📊 Lihat Status Semua Node (screen)"
-        echo -e "${GREEN} 3.${RESET} 🧾 Lihat Log Node (screen)"
-        echo -e "${GREEN} 4.${RESET} ❌ Hentikan Semua Node"
-        echo -e "${GREEN} 5.${RESET} 🔄 Update Nexus CLI"
-        echo -e "${GREEN} 6.${RESET} 🚪 Keluar"
-        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-        read -rp "Pilih menu (1-6): " pilihan
-        case $pilihan in
-            1) run_node ;;
-            2) list_nodes ;;
-            3) view_logs ;;
-            4) stop_all_nodes ;;
-            5) update_nexus_cli ;;
-            6) exit 0 ;;
-            *) echo "Pilihan tidak valid."; sleep 2 ;;
-        esac
-    done
-}
-
-# === Eksekusi awal ===
-check_dependencies
-install_nexus_cli
-main_menu
+while true; do
+    show_header
+    echo -e "${GREEN} 1.${RESET} ➕ Tambah & Jalankan Node"
+    echo -e "${GREEN} 2.${RESET} 📊 Lihat Status Semua Node"
+    echo -e "${GREEN} 3.${RESET} 🧾 Lihat Log Node"
+    echo -e "${GREEN} 4.${RESET} ❌ Hapus Semua Node"
+    echo -e "${GREEN} 5.${RESET} 🔄 Update Nexus CLI"
+    echo -e "${GREEN} 6.${RESET} 🚪 Keluar"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    read -rp "Pilih menu (1-6): " pilihan
+    case $pilihan in
+        1) add_node ;;
+        2) list_nodes ;;
+        3) view_logs ;;
+        4) uninstall_all_nodes ;;
+        5) update_cli ;;
+        6) exit 0 ;;
+        *) echo "Pilihan tidak valid."; sleep 2 ;;
+    esac
+done

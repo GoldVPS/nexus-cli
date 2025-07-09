@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Cek input interaktif
+# Cek interaktif
 if [ ! -t 0 ]; then
   echo "❌ Script ini tidak mendukung input interaktif via pipe."
   echo "💡 Jalankan dengan: curl -O https://raw.githubusercontent.com/GoldVPS/nexus-cli/main/nexus.sh && bash nexus.sh"
@@ -16,12 +16,12 @@ if [ ${#NODE_IDS[@]} -eq 0 ]; then
   exit 1
 fi
 
-# Deteksi Ubuntu
+# Deteksi versi Ubuntu
 UBUNTU_VERSION=$(lsb_release -rs)
 echo "📦 Detected Ubuntu $UBUNTU_VERSION"
 sleep 1
 
-# Siapkan Docker (jika diperlukan)
+# Install Docker jika dibutuhkan
 if [[ "$UBUNTU_VERSION" != "24.04" ]]; then
   if ! command -v docker &>/dev/null; then
     echo "📦 Docker belum ada, memasang..."
@@ -31,15 +31,15 @@ if [[ "$UBUNTU_VERSION" != "24.04" ]]; then
   fi
 fi
 
-# Jalankan untuk tiap Node ID
+# Loop semua node
 for NODE_ID in "${NODE_IDS[@]}"; do
   echo ""
   echo "⚙️ Menyiapkan Node ID: $NODE_ID"
 
   if [[ "$UBUNTU_VERSION" == "24.04" ]]; then
-    # Versi native (tanpa docker), pakai screen
+    # Native install (tanpa Docker)
     screen -S nexus-$NODE_ID -dm bash -c "
-      echo '🚀 Menjalankan Nexus CLI untuk Node ID $NODE_ID (tanpa Docker)...'
+      echo '🚀 Menjalankan Nexus CLI (tanpa Docker)...'
       curl https://cli.nexus.xyz/ | sh
       sleep 5
       source ~/.bashrc
@@ -50,18 +50,24 @@ for NODE_ID in "${NODE_IDS[@]}"; do
     echo "🔍 Cek: screen -r nexus-$NODE_ID"
 
   else
-    # Versi docker
-    if docker ps -a --format "{{.Names}}" | grep -q "nexus-$NODE_ID"; then
+    # Docker
+    if docker ps -a --format '{{.Names}}' | grep -q "nexus-$NODE_ID"; then
       echo "⚠️ Container nexus-$NODE_ID sudah ada, menghapus..."
       docker rm -f nexus-$NODE_ID
     fi
 
     echo "🐳 Menjalankan Docker container untuk Node ID $NODE_ID..."
 
-    docker run -dit --name nexus-$NODE_ID ubuntu:24.04
+    # Jalankan dengan akses penuh
+    docker run -dit \
+      --name nexus-$NODE_ID \
+      --privileged \
+      --network host \
+      --cap-add=ALL \
+      ubuntu:24.04
 
     docker exec nexus-$NODE_ID bash -c "
-      apt update && apt install -y curl wget unzip
+      apt update && apt install -y curl wget unzip net-tools iproute2 procps
       curl https://cli.nexus.xyz/ | sh
       sleep 5
       source /root/.profile
@@ -69,7 +75,7 @@ for NODE_ID in "${NODE_IDS[@]}"; do
     "
 
     echo "✅ Node $NODE_ID dijalankan di Docker."
-    echo "🔍 Cek: docker logs -f nexus-$NODE_ID"
+    echo "🔍 Cek log: docker logs -f nexus-$NODE_ID"
   fi
 done
 

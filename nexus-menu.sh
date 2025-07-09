@@ -16,9 +16,9 @@ RESET='\033[0m'
 # === Header Tampilan ===
 function show_header() {
     clear
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "           Nexus CLI Node Manager"
-    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}╭────────────────────────────────────────────╮"
+    echo -e "│         🌐 Nexus CLI Node Manager         │"
+    echo -e "╰────────────────────────────────────────────╯${RESET}"
 }
 
 # === Cek versi Ubuntu ===
@@ -35,6 +35,15 @@ function check_docker() {
         systemctl enable docker
         systemctl start docker
     fi
+}
+
+# === Update Nexus CLI (untuk native node) ===
+function update_nexus_cli() {
+    echo -e "${YELLOW}🔄 Update Nexus CLI ke versi terbaru...${RESET}"
+    rm -rf ~/.nexus
+    curl -sSL https://cli.nexus.xyz/ | sh
+    export PATH="$HOME/.nexus/bin:$PATH"
+    echo -e "${GREEN}✅ Nexus CLI berhasil diupdate.${RESET}"
 }
 
 # === Build Docker Image ===
@@ -56,13 +65,13 @@ EOF
     cat > entrypoint.sh <<EOF
 #!/bin/bash
 set -e
-if [ -z "\$NODE_ID" ]; then
+if [ -z "$NODE_ID" ]; then
     echo "NODE_ID belum disetel"
     exit 1
 fi
 mkdir -p /root/.nexus
-echo "\$NODE_ID" > "/root/.nexus/node-id"
-screen -dmS nexus bash -c "nexus-network start --node-id \$NODE_ID &>> /root/nexus.log"
+echo "$NODE_ID" > "/root/.nexus/node-id"
+screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID &>> /root/nexus.log"
 sleep 3
 tail -f /root/nexus.log
 EOF
@@ -76,7 +85,8 @@ EOF
 function run_native_node() {
     local node_id=$1
     local screen_name="nexus-${node_id}"
-    screen -dmS "$screen_name" bash -c "curl -sSL https://cli.nexus.xyz/ | sh && export PATH=\$HOME/.nexus/bin:\$PATH && sleep 5 && nexus-network start --node-id $node_id && exec bash"
+    update_nexus_cli
+    screen -dmS "$screen_name" bash -c "nexus-network start --node-id $node_id && exec bash"
     echo -e "${GREEN}Node $node_id dijalankan di screen: screen -r $screen_name${RESET}"
 }
 
@@ -150,6 +160,21 @@ function uninstall_all_nodes() {
     read -p "Tekan enter..." dummy
 }
 
+# === Update Semua Node Docker ===
+function update_all_nodes() {
+    show_header
+    echo -e "${YELLOW}🔄 Update Nexus CLI di semua node Docker...${RESET}"
+    docker image rm "$IMAGE_NAME" 2>/dev/null || true
+    build_image
+    local all_nodes=($(get_all_nodes))
+    for node_id in "${all_nodes[@]}"; do
+        echo -e "🔁 Restarting & updating: $node_id"
+        run_container_node "$node_id"
+    done
+    echo -e "${GREEN}✅ Semua node Docker telah diupdate.${RESET}"
+    read -p "Tekan enter..." dummy
+}
+
 # === Tambah & jalankan node ===
 function add_node() {
     check_docker
@@ -174,15 +199,17 @@ while true; do
     echo -e "${GREEN} 2.${RESET} 📊 Lihat Status Semua Node"
     echo -e "${GREEN} 3.${RESET} 🧾 Lihat Log Node"
     echo -e "${GREEN} 4.${RESET} ❌ Hapus Semua Node"
-    echo -e "${GREEN} 5.${RESET} 🚪 Keluar"
+    echo -e "${GREEN} 5.${RESET} 🔄 Update Semua Node"
+    echo -e "${GREEN} 6.${RESET} 🚪 Keluar"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    read -rp "Pilih menu (1-5): " pilihan
+    read -rp "Pilih menu (1-6): " pilihan
     case $pilihan in
         1) add_node ;;
         2) list_nodes ;;
         3) view_logs ;;
         4) uninstall_all_nodes ;;
-        5) exit 0 ;;
+        5) update_all_nodes ;;
+        6) exit 0 ;;
         *) echo "Pilihan tidak valid."; sleep 2 ;;
     esac
 done

@@ -37,22 +37,8 @@ function check_docker() {
     fi
 }
 
-# === Periksa & install Rust ===
-function check_rust() {
-    if ! command -v cargo >/dev/null 2>&1; then
-        echo -e "${YELLOW}Rust belum terinstall. Menginstal Rust...${RESET}"
-        curl https://sh.rustup.rs -sSf | bash -s -- -y
-        export PATH="$HOME/.cargo/bin:$PATH"
-        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
-        source ~/.bashrc
-    else
-        echo -e "${GREEN}✔ Rust sudah terinstall.${RESET}"
-    fi
-}
-
 # === Build Docker Image ===
 function build_image() {
-    check_rust
     WORKDIR=$(mktemp -d)
     cd "$WORKDIR"
 
@@ -60,13 +46,8 @@ function build_image() {
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PROVER_ID_FILE=/root/.nexus/node-id
-RUN apt-get update && apt-get install -y curl wget git screen bash build-essential pkg-config libssl-dev net-tools iproute2 procps \
-    && curl https://sh.rustup.rs -sSf | bash -s -- -y \
-    && export PATH="/root/.cargo/bin:$PATH" \
-    && git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli \
-    && cd /root/nexus-cli/clients/cli \
-    && /root/.cargo/bin/cargo build --release \
-    && ln -sf /root/nexus-cli/clients/cli/target/release/nexus-cli /usr/local/bin/nexus-network
+RUN apt-get update && apt-get install -y curl screen bash net-tools iproute2 procps \
+    && rm -rf /var/lib/apt/lists/*
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
@@ -75,15 +56,13 @@ EOF
     cat > entrypoint.sh <<EOF
 #!/bin/bash
 set -e
-if [ -z "$NODE_ID" ]; then
+if [ -z "\$NODE_ID" ]; then
     echo "NODE_ID belum disetel"
     exit 1
 fi
 mkdir -p /root/.nexus
-echo "$NODE_ID" > "/root/.nexus/node-id"
-screen -dmS nexus bash -c "nexus-network start --node-id $NODE_ID &>> /root/nexus.log"
-sleep 3
-tail -f /root/nexus.log
+echo "\$NODE_ID" > /root/.nexus/node-id
+exec nexus-network start --node-id "\$NODE_ID"
 EOF
 
     docker build -t "$IMAGE_NAME" .
@@ -94,17 +73,8 @@ EOF
 # === Jalankan node secara native ===
 function run_native_node() {
     local node_id=$1
-    check_rust
-    if [ ! -f "$HOME/.nexus/bin/nexus-network" ]; then
-        git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli
-        cd /root/nexus-cli/clients/cli
-        cargo build --release
-        mkdir -p "$HOME/.nexus/bin"
-        cp target/release/nexus-cli "$HOME/.nexus/bin/nexus-network"
-        export PATH="$HOME/.nexus/bin:$PATH"
-    fi
     local screen_name="nexus-${node_id}"
-    screen -dmS "$screen_name" bash -c "nexus-network start --node-id $node_id && exec bash"
+    screen -dmS "$screen_name" bash -c "curl -sSL https://cli.nexus.xyz/ | sh && export PATH=\$HOME/.nexus/bin:\$PATH && sleep 5 && nexus-network start --node-id $node_id && exec bash"
     echo -e "${GREEN}Node $node_id dijalankan di screen: screen -r $screen_name${RESET}"
 }
 
@@ -112,19 +82,11 @@ function run_native_node() {
 function run_container_node() {
     local node_id=$1
     local container_name="${BASE_CONTAINER_NAME}-${node_id}"
-    local log_file="${LOG_DIR}/nexus-${node_id}.log"
 
     docker rm -f "$container_name" 2>/dev/null || true
-    mkdir -p "$LOG_DIR"
-    touch "$log_file"
-    chmod 644 "$log_file"
-
     docker run -d --name "$container_name" \
         --privileged --network host --cap-add=ALL \
-        -v "$log_file":/root/nexus.log \
         -e NODE_ID="$node_id" "$IMAGE_NAME"
-
-    echo "0 0 * * * rm -f $log_file" > "/etc/cron.d/nexus-log-cleanup-${node_id}"
 }
 
 # === Get all node IDs ===
@@ -156,25 +118,14 @@ function view_logs() {
     read -rp "Nomor: " choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice > 0 && choice <= ${#all_nodes[@]} )); then
         local selected=${all_nodes[$((choice-1))]}
-        local container_name="${BASE_CONTAINER_NAME}-${selected}"
-
-        if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
-            docker logs -f "$container_name"
-        else
-            echo -e "${YELLOW}Node ini dijalankan secara native di screen.${RESET}"
-            echo -e "Gunakan perintah: ${CYAN}screen -r nexus-${selected}${RESET}"
-        fi
-    else
-        echo "Pilihan tidak valid."
+        docker logs -f "${BASE_CONTAINER_NAME}-${selected}"
     fi
-    read -p "Tekan enter untuk kembali..." dummy
 }
 
 # === Hapus Node ===
 function uninstall_node() {
     local node_id=$1
     docker rm -f "${BASE_CONTAINER_NAME}-${node_id}" 2>/dev/null || true
-    rm -f "${LOG_DIR}/nexus-${node_id}.log" "/etc/cron.d/nexus-log-cleanup-${node_id}" 2>/dev/null || true
     echo -e "${YELLOW}Node $node_id telah dihapus.${RESET}"
 }
 

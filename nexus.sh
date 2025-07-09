@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Cek interaktif
+# Cek apakah dijalankan langsung
 if [ ! -t 0 ]; then
   echo "❌ Script ini tidak mendukung input interaktif via pipe."
-  echo "💡 Jalankan dengan: curl -O https://raw.githubusercontent.com/GoldVPS/nexus-cli/main/nexus.sh && bash nexus.sh"
+  echo "💡 Jalankan: curl -O https://raw.githubusercontent.com/GoldVPS/nexus-cli/main/nexus.sh && bash nexus.sh"
   exit 1
 fi
 
-# Input Node ID
+# Input node ID
 echo "🧠 Masukkan satu atau lebih Node ID Nexus (pisahkan dengan spasi):"
 read -r -a NODE_IDS
 
@@ -16,7 +16,7 @@ if [ ${#NODE_IDS[@]} -eq 0 ]; then
   exit 1
 fi
 
-# Deteksi versi Ubuntu
+# Deteksi Ubuntu version
 UBUNTU_VERSION=$(lsb_release -rs)
 echo "📦 Detected Ubuntu $UBUNTU_VERSION"
 sleep 1
@@ -31,18 +31,19 @@ if [[ "$UBUNTU_VERSION" != "24.04" ]]; then
   fi
 fi
 
-# Loop semua node
+# Loop per node ID
 for NODE_ID in "${NODE_IDS[@]}"; do
   echo ""
   echo "⚙️ Menyiapkan Node ID: $NODE_ID"
 
   if [[ "$UBUNTU_VERSION" == "24.04" ]]; then
-    # Native install (tanpa Docker)
+    # Native install (Ubuntu 24.04)
     screen -S nexus-$NODE_ID -dm bash -c "
-      echo '🚀 Menjalankan Nexus CLI (tanpa Docker)...'
+      echo '🚀 Menjalankan Nexus CLI native...'
       curl https://cli.nexus.xyz/ | sh
-      sleep 5
-      source ~/.bashrc
+      echo 'export PATH=\$HOME/.nexus/bin:\$PATH' >> ~/.bashrc
+      export PATH=\$HOME/.nexus/bin:\$PATH
+      sleep 3
       nexus-network start --node-id $NODE_ID
       exec bash
     "
@@ -50,15 +51,14 @@ for NODE_ID in "${NODE_IDS[@]}"; do
     echo "🔍 Cek: screen -r nexus-$NODE_ID"
 
   else
-    # Docker
+    # Jalankan pakai Docker
     if docker ps -a --format '{{.Names}}' | grep -q "nexus-$NODE_ID"; then
-      echo "⚠️ Container nexus-$NODE_ID sudah ada, menghapus..."
+      echo "⚠️ Container nexus-$NODE_ID sudah ada, menghapus dulu..."
       docker rm -f nexus-$NODE_ID
     fi
 
-    echo "🐳 Menjalankan Docker container untuk Node ID $NODE_ID..."
+    echo "🐳 Menjalankan Docker container Nexus..."
 
-    # Jalankan dengan akses penuh
     docker run -dit \
       --name nexus-$NODE_ID \
       --privileged \
@@ -66,13 +66,14 @@ for NODE_ID in "${NODE_IDS[@]}"; do
       --cap-add=ALL \
       ubuntu:24.04
 
-    docker exec nexus-$NODE_ID bash -c "
+    docker exec nexus-$NODE_ID bash -c '
       apt update && apt install -y curl wget unzip net-tools iproute2 procps
       curl https://cli.nexus.xyz/ | sh
-      sleep 5
-      source /root/.profile
-      nexus-network start --node-id $NODE_ID
-    "
+      echo "export PATH=\$HOME/.nexus/bin:\$PATH" >> ~/.bashrc
+      export PATH=$HOME/.nexus/bin:$PATH
+      sleep 3
+      nexus-network start --node-id '"$NODE_ID"'
+    '
 
     echo "✅ Node $NODE_ID dijalankan di Docker."
     echo "🔍 Cek log: docker logs -f nexus-$NODE_ID"

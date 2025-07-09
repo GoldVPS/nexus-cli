@@ -21,7 +21,7 @@ UBUNTU_VERSION=$(lsb_release -rs)
 echo "📦 Detected Ubuntu $UBUNTU_VERSION"
 sleep 1
 
-# Install Docker jika dibutuhkan
+# Install Docker jika butuh (untuk Ubuntu < 24.04)
 if [[ "$UBUNTU_VERSION" != "24.04" ]]; then
   if ! command -v docker &>/dev/null; then
     echo "📦 Docker belum ada, memasang Docker..."
@@ -35,13 +35,13 @@ fi
 for NODE_ID in "${NODE_IDS[@]}"; do
   echo "⚙️ Menyiapkan Node ID: $NODE_ID"
 
-  # Hapus container lama jika ada
+  # Hapus container jika sudah ada
   if docker ps -a --format "{{.Names}}" | grep -q "nexus-$NODE_ID"; then
     echo "⚠️ Container nexus-$NODE_ID sudah ada, menghapus..."
     docker rm -f nexus-$NODE_ID
   fi
 
-  # Jalankan via screen
+  # Jalankan semuanya di dalam screen
   screen -S nexus-$NODE_ID -dm bash -c "
     if [ \"$UBUNTU_VERSION\" == \"24.04\" ]; then
       echo '🚀 Install Nexus CLI di Ubuntu 24.04 (tanpa Docker)...'
@@ -49,6 +49,7 @@ for NODE_ID in "${NODE_IDS[@]}"; do
       sleep 5
       source ~/.bashrc
       nexus-network start --node-id $NODE_ID
+      exec bash
     else
       echo '🐳 Menjalankan Docker container untuk Node ID: $NODE_ID'
       docker run -dit --name nexus-$NODE_ID ubuntu:24.04 bash -c '
@@ -59,8 +60,12 @@ for NODE_ID in "${NODE_IDS[@]}"; do
         nexus-network start --node-id $NODE_ID
         exec bash
       '
+
+      echo ''
+      echo '📺 Monitoring log Docker...'
+      echo '----------------------------'
+      docker logs -f nexus-$NODE_ID
     fi
-    exec bash
   "
 
   echo "🔹 screen -r nexus-$NODE_ID"
@@ -68,4 +73,4 @@ done
 
 # Info akhir
 echo ""
-echo "✅ Semua Node Nexus telah dijalankan dalam screen."
+echo "✅ Semua Node Nexus telah dijalankan di dalam screen."

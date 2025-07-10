@@ -66,7 +66,7 @@ update_cli() {
   cargo build --release
 
   # Copy hasil build ke /usr/local/bin agar bisa dipanggil global
-  cp target/release/nexus /usr/local/bin/nexus
+  cp target/release/nexus-network /usr/local/bin/nexus
 
   echo -e "\n✅ Nexus CLI berhasil diupdate dan dibuild dari source.\n"
 }

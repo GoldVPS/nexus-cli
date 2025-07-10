@@ -95,6 +95,25 @@ function uninstall_all() {
     sleep 2
 }
 
+# === Stop All Nodes ===
+uninstall_cli() {
+  echo -e "\n🚨 Uninstalling Nexus CLI..."
+
+  # Hapus binary
+  rm -f /usr/local/bin/nexus
+
+  # Hapus folder source jika ada
+  rm -rf /root/nexus-cli
+
+  # Opsional: hapus Rust jika cuma buat Nexus
+  read -p "Ingin uninstall Rust juga? (y/N): " uninstall_rust
+  if [[ "$uninstall_rust" =~ ^[Yy]$ ]]; then
+    rustup self uninstall -y
+  fi
+
+  echo -e "\n✅ Nexus CLI berhasil dihapus.\n"
+}
+
 # === MAIN MENU ===
 while true; do
     show_header
@@ -103,6 +122,7 @@ while true; do
     echo -e "${GREEN} 3.${RESET} View Node Logs"
     echo -e "${GREEN} 4.${RESET} Stop All Nodes"
     echo -e "${GREEN} 5.${RESET} Exit"
+    echo -e "${GREEN} 6.${RESET} Uninstall Nexus CLI"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     read -rp "Select an option (1-5): " pilihan
     case $pilihan in

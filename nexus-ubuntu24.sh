@@ -46,12 +46,29 @@ function run_node() {
 }
 
 # === Update Nexus CLI ===
-function update_cli() {
-    echo -e "${YELLOW}Updating Nexus CLI...${RESET}"
-    rm -rf $HOME/.nexus
-    curl -sSL https://cli.nexus.xyz/ | sh
-    echo -e "${GREEN}Nexus CLI updated successfully.${RESET}"
-    sleep 2
+update_cli() {
+  echo -e "\nUpdating Nexus CLI...\n"
+  sleep 1
+
+  # Cek dan install Rust kalau belum ada
+  if ! command -v cargo &> /dev/null; then
+    echo "Rust belum terinstall. Menginstall Rust..."
+    curl https://sh.rustup.rs -sSf | sh -s -- -y
+    source "$HOME/.cargo/env"
+  fi
+
+  # Hapus repo lama jika ada
+  rm -rf /root/nexus-cli
+
+  # Clone repo dan build ulang
+  git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli
+  cd /root/nexus-cli/clients/cli || exit
+  cargo build --release
+
+  # Copy hasil build ke /usr/local/bin agar bisa dipanggil global
+  cp target/release/nexus /usr/local/bin/nexus
+
+  echo -e "\n✅ Nexus CLI berhasil diupdate dan dibuild dari source.\n"
 }
 
 # === View Node Logs ===

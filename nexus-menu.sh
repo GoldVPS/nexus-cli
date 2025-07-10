@@ -85,7 +85,6 @@ Updating Nexus CLI from source...
 ✅ Nexus CLI berhasil diupdate dan dibuild dari source.
 "
 }
-}
 
 # === View Node Logs ===
 function view_logs() {

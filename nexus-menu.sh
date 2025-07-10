@@ -81,9 +81,7 @@ Updating Nexus CLI from source...
   # Kembali ke direktori awal
   cd ~
 
-  echo -e "
-✅ Nexus CLI berhasil diupdate dan dibuild dari source.
-"
+  echo -e "✅ Nexus CLI berhasil diupdate dan dibuild dari source."
 }
 
 # === View Node Logs ===

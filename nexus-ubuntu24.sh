@@ -47,8 +47,15 @@ function run_node() {
 
 # === Update Nexus CLI ===
 update_cli() {
-  echo -e "\nUpdating Nexus CLI...\n"
+  echo -e "\nUpdating Nexus CLI from source...\n"
   sleep 1
+
+  # Ambil semua node id dari nama screen nexus-
+  active_nodes=$(screen -ls | grep nexus- | awk -F'nexus-' '{print $2}' | awk '{print $1}')
+
+  # Unset legacy CLI install from ~/.nexus if exists
+  rm -rf ~/.nexus
+  sed -i '/.nexus\/bin/d' ~/.bashrc
 
   # Cek dan install Rust kalau belum ada
   if ! command -v cargo &> /dev/null; then
@@ -64,14 +71,32 @@ update_cli() {
   rm -rf /root/nexus-cli
 
   # Clone repo dan build ulang
-  git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli
-  cd /root/nexus-cli/clients/cli || exit
+  cd /root || exit
+  git clone https://github.com/nexus-xyz/nexus-cli.git
+  cd nexus-cli/clients/cli || exit
   cargo build --release
 
   # Copy hasil build ke /usr/local/bin agar bisa dipanggil global
-  cp target/release/nexus-network /usr/local/bin/nexus-network
+  cp target/release/nexus-network /usr/local/bin/nexus
+
+  # Kembali ke direktori awal
+  cd ~
 
   echo -e "\n✅ Nexus CLI berhasil diupdate dan dibuild dari source.\n"
+
+  read -p "Ingin otomatis restart node yang aktif? (Y/n): " restart_choice
+  if [[ "$restart_choice" =~ ^[Yy]$ || -z "$restart_choice" ]]; then
+    echo -e "\n🔁 Restarting previously active nodes..."
+    for s in $(screen -ls | grep nexus- | awk '{print $1}'); do
+      screen -S "$s" -X quit
+    done
+    for id in $active_nodes; do
+      screen -dmS nexus-${id} bash -c "nexus start --node-id $id && exec bash"
+      echo "✅ Node $id restarted."
+    done
+  else
+    echo -e "\n⚠️  Selesai update. Jika sebelumnya ada node aktif, silakan jalankan ulang via menu 1."
+  fi
 }
 
 # === View Node Logs ===

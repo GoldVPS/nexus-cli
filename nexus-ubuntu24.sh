@@ -152,17 +152,21 @@ uninstall_cli() {
 }
 
 # === MAIN MENU ===
+# === MAIN MENU ===
 while true; do
     show_header
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${GREEN} 1.${RESET} Add & Run Node"
-    echo -e "${GREEN} 2.${RESET} Update Nexus CLI"
-    echo -e "${GREEN} 3.${RESET} View Node Logs"
-    echo -e "${GREEN} 4.${RESET} Stop All Nodes"
-    echo -e "${GREEN} 5.${RESET} Exit"
-    echo -e "${GREEN} 6.${RESET} Uninstall Nexus CLI"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    read -rp "Select an option (1-5): " pilihan
+    echo -e "\e[38;5;44m╭────────────────────────────────────────────╮"
+    echo -e "│   \e[1;32m1.\e[0m Add & Run Node                         \e[38;5;44m│"
+    echo -e "│   \e[1;32m2.\e[0m Update Nexus CLI                       \e[38;5;44m│"
+    echo -e "│   \e[1;32m3.\e[0m View Node Logs                         \e[38;5;44m│"
+    echo -e "│   \e[1;32m4.\e[0m Stop All Nodes                         \e[38;5;44m│"
+    echo -e "│   \e[1;32m5.\e[0m Exit                                   \e[38;5;44m│"
+    echo -e "│   \e[1;32m6.\e[0m Uninstall Nexus CLI                  \e[38;5;44m│"
+    echo -e "╰────────────────────────────────────────────╯\e[0m"
+
+    echo -ne "\n\e[1;36mSelect an option (1-6): \e[0m"
+    read -r pilihan
+
     case $pilihan in
         1)
             install_dependencies
@@ -174,6 +178,7 @@ while true; do
         4) uninstall_all ;;
         5) exit 0 ;;
         6) uninstall_cli ;;
-        *) echo "Invalid option."; sleep 2 ;;
+        *) echo -e "\e[31mInvalid option.\e[0m"; sleep 2 ;;
     esac
 done
+

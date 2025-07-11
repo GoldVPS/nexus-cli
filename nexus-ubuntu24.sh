@@ -156,13 +156,13 @@ uninstall_cli() {
 while true; do
     show_header
     echo -e "\e[38;5;44m╭────────────────────────────────────────────╮"
-    echo -e "│   \e[1;32m1.\e[0m Add & Run Node                         \e[38;5;44m│"
-    echo -e "│   \e[1;32m2.\e[0m Update Nexus CLI                       \e[38;5;44m│"
-    echo -e "│   \e[1;32m3.\e[0m View Node Logs                         \e[38;5;44m│"
-    echo -e "│   \e[1;32m4.\e[0m Stop All Nodes                         \e[38;5;44m│"
-    echo -e "│   \e[1;32m5.\e[0m Exit                                   \e[38;5;44m│"
-    echo -e "│   \e[1;32m6.\e[0m Uninstall Nexus CLI                  \e[38;5;44m│"
-    echo -e "╰────────────────────────────────────────────╯\e[0m"
+    echo -e "│   \e[1;32m1.\e[0m Add & Run Node                        \e[38;5;44m│"
+    echo -e "│   \e[1;32m2.\e[0m Update Nexus CLI                      \e[38;5;44m│"
+    echo -e "│   \e[1;32m3.\e[0m View Node Logs                        \e[38;5;44m│"
+    echo -e "│   \e[1;32m4.\e[0m Stop All Nodes                        \e[38;5;44m│"
+    echo -e "│   \e[1;32m5.\e[0m Exit                                  \e[38;5;44m│"
+    echo -e "│   \e[1;32m6.\e[0m Uninstall Nexus CLI                   \e[38;5;44m│"
+    echo -e "╰───────────────────────────────────────────────────────╯\e[0m"
 
     echo -ne "\n\e[1;36mSelect an option (1-6): \e[0m"
     read -r pilihan

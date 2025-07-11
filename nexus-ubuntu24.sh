@@ -154,6 +154,7 @@ uninstall_cli() {
 # === MAIN MENU ===
 while true; do
     show_header
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo -e "${GREEN} 1.${RESET} Add & Run Node"
     echo -e "${GREEN} 2.${RESET} Update Nexus CLI"
     echo -e "${GREEN} 3.${RESET} View Node Logs"

@@ -37,7 +37,20 @@ bash nexus-ubuntu24.sh
 ```
 
 ---
+## Issue
+If you facing this Issue
+**Do you agree to the Nexus Beta Terms of Use (https://nexus.xyz/terms-of-use)? (Y/n) Y**
 
+
+**Could not find a precompiled binary for linux-x86_64**
+**Please build from source:**
+  **git clone https://github.com/nexus-xyz/nexus-cli.git**
+  **cd nexus-cli/clients/cli**
+  **cargo build --release**
+
+**Please Choose Update Nexus CLI before add & Run Nexus CLI**
+
+---
 ## 🔁 Update Nexus CLI
 
 This script removes the existing `.nexus` directory and reinstalls the Nexus CLI from the official source.

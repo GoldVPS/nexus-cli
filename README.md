@@ -40,7 +40,7 @@ bash nexus-ubuntu24.sh
 ⚠️ Issue
 
 If you are facing this issue:
-
+```bash
 Do you agree to the Nexus Beta Terms of Use (https://nexus.xyz/terms-of-use)? (Y/n) Y
 
 Could not find a precompiled binary for linux-x86_64  
@@ -48,8 +48,9 @@ Please build from source:
 git clone https://github.com/nexus-xyz/nexus-cli.git  
 cd nexus-cli/clients/cli  
 cargo build --release
-
-👉 Please Choose Update Nexus CLI before Add & Run Nexus CLI
+```
+👉 Please Choose Update Nexus CLI before Add & Run Nexus CLI Even youre not run Node before
+its will auto install rust and build cargo
 
 ---
 ## 🔁 Update Nexus CLI

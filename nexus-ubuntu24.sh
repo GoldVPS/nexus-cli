@@ -28,24 +28,22 @@ function show_header() {
 }
 
 # === Check and Install Dependencies ===
-function install_dependencies() {
-    echo -e "${YELLOW}Checking dependencies...${RESET}"
-    apt update
-    apt install -y curl screen git build-essential pkg-config libssl-dev libclang-dev cmake
-}
-
-# === Install Nexus CLI if not already present ===
 function install_nexus_cli() {
     if [ ! -f "$HOME/.nexus/bin/nexus-network" ]; then
         echo -e "${YELLOW}Installing Nexus CLI...${RESET}"
-        
-        # Simpan output curl | sh ke file sementara
-        TMPFILE=$(mktemp)
-        curl -sSL https://cli.nexus.xyz/ | bash &> "$TMPFILE"
 
-        # Deteksi apakah output menyarankan build manual
+        TMPFILE=$(mktemp)
+
+        # Jalankan installer dan tampilkan output ke layar & file
+        bash -c "curl -sSL https://cli.nexus.xyz/ | bash" | tee "$TMPFILE"
+
+        # Deteksi apakah CLI gagal terinstall karena binary tidak tersedia
         if grep -q "Please build from source" "$TMPFILE"; then
             echo -e "${RED}Precompiled binary not available. Building manually from source...${RESET}"
+            update_cli
+        elif grep -q "Do you agree to the Nexus Beta Terms" "$TMPFILE"; then
+            echo -e "${RED}❌ Gagal otomatis install karena butuh input interaktif (Terms of Use).${RESET}"
+            echo -e "Silakan install manual atau lanjut build dari source..."
             update_cli
         else
             echo -e "${GREEN}✅ Nexus CLI installed successfully.${RESET}"

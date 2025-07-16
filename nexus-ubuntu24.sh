@@ -12,7 +12,6 @@ CYAN='\033[0;36m'
 RESET='\033[0m'
 
 # === Header Display ===
-# === Header Display ===
 function show_header() {
     clear
     echo -e "\e[38;5;220m"
@@ -39,24 +38,31 @@ function install_dependencies() {
 function install_nexus_cli() {
     if [ ! -f "$HOME/.nexus/bin/nexus-network" ]; then
         echo -e "${YELLOW}Installing Nexus CLI...${RESET}"
-        curl -sSL https://cli.nexus.xyz/ | sh || echo -e "${RED}Failed to install via script, please update manually later.${RESET}"
-    fi
-    export PATH="$HOME/.nexus/bin:$PATH"
-    echo 'export PATH="$HOME/.nexus/bin:$PATH"' >> ~/.bashrc
-}
+        
+        # Simpan output curl | sh ke file sementara
+        TMPFILE=$(mktemp)
+        curl -sSL https://cli.nexus.xyz/ | bash &> "$TMPFILE"
 
-# === Run Node ===
-function run_node() {
-    read -rp "Enter NODE_ID: " NODE_ID
-    [ -z "$NODE_ID" ] && echo "NODE_ID cannot be empty." && sleep 2 && return
-    screen -dmS nexus-${NODE_ID} bash -c "nexus-network start --node-id $NODE_ID && exec bash"
-    echo -e "${GREEN}Node $NODE_ID started in screen session: screen -r nexus-${NODE_ID}${RESET}"
-    sleep 2
+        # Deteksi apakah output menyarankan build manual
+        if grep -q "Please build from source" "$TMPFILE"; then
+            echo -e "${RED}Precompiled binary not available. Building manually from source...${RESET}"
+            update_cli
+        else
+            echo -e "${GREEN}✅ Nexus CLI installed successfully.${RESET}"
+        fi
+
+        rm -f "$TMPFILE"
+    fi
+
+    export PATH="$HOME/.nexus/bin:$PATH"
+    if ! grep -q 'nexus/bin' ~/.bashrc; then
+        echo 'export PATH="$HOME/.nexus/bin:$PATH"' >> ~/.bashrc
+    fi
 }
 
 # === Update Nexus CLI ===
 update_cli() {
-  echo -e "\nUpdating Nexus CLI from source...\n"
+  echo -e "\n\e[1;33mUpdating Nexus CLI from source...\e[0m\n"
   sleep 1
 
   # Ambil semua node id dari nama screen nexus-
@@ -68,8 +74,11 @@ update_cli() {
 
   # Cek dan install Rust kalau belum ada
   if ! command -v cargo &> /dev/null; then
-    echo "Rust belum terinstall. Menginstall Rust..."
+    echo -e "\e[33mRust belum terinstall. Menginstall Rust...\e[0m"
     curl https://sh.rustup.rs -sSf | sh -s -- -y
+    source "$HOME/.cargo/env"
+    echo 'source "$HOME/.cargo/env"' >> ~/.bashrc
+  else
     source "$HOME/.cargo/env"
   fi
 
@@ -80,22 +89,39 @@ update_cli() {
   rm -rf /root/nexus-cli
 
   # Clone repo dan build ulang
-  cd /root || exit
-  git clone https://github.com/nexus-xyz/nexus-cli.git
-  cd nexus-cli/clients/cli || exit
-  cargo build --release
+  cd /root || exit 1
+  git clone https://github.com/nexus-xyz/nexus-cli.git || {
+    echo -e "\n\e[31m❌ Gagal meng-clone repository Nexus CLI.\e[0m\n"
+    return 1
+  }
 
-  # Copy hasil build ke /usr/local/bin agar bisa dipanggil global
+  cd nexus-cli/clients/cli || {
+    echo -e "\n\e[31m❌ Folder build tidak ditemukan.\e[0m\n"
+    return 1
+  }
+
+  cargo build --release || {
+    echo -e "\n\e[31m❌ Gagal build Nexus CLI dengan cargo.\e[0m\n"
+    return 1
+  }
+
+  # Pastikan hasil build ada
+  if [ ! -f target/release/nexus-network ]; then
+    echo -e "\n\e[31m❌ File binary nexus-network tidak ditemukan setelah build.\e[0m\n"
+    return 1
+  fi
+
+  # Copy hasil build ke /usr/local/bin
   cp target/release/nexus-network /usr/local/bin/nexus
 
   # Kembali ke direktori awal
   cd ~
 
-  echo -e "\n✅ Nexus CLI berhasil diupdate dan dibuild dari source.\n"
+  echo -e "\n✅ \e[32mNexus CLI berhasil diupdate dan dibuild dari source.\e[0m\n"
 
   read -p "Ingin otomatis restart node yang aktif? (Y/n): " restart_choice
   if [[ "$restart_choice" =~ ^[Yy]$ || -z "$restart_choice" ]]; then
-    echo -e "\n🔁 Restarting previously active nodes..."
+    echo -e "\n🔁 \e[36mRestarting previously active nodes...\e[0m"
     for s in $(screen -ls | grep nexus- | awk '{print $1}'); do
       screen -S "$s" -X quit
     done
@@ -104,7 +130,7 @@ update_cli() {
       echo "✅ Node $id restarted."
     done
   else
-    echo -e "\n⚠️  Selesai update. Jika sebelumnya ada node aktif, silakan jalankan ulang via menu 1."
+    echo -e "\n⚠️  \e[33mSelesai update. Jika sebelumnya ada node aktif, silakan jalankan ulang via menu 1.\e[0m"
   fi
 }
 
@@ -151,7 +177,6 @@ uninstall_cli() {
   echo -e "\n✅ Nexus CLI berhasil dihapus.\n"
 }
 
-# === MAIN MENU ===
 # === MAIN MENU ===
 while true; do
     show_header

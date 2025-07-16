@@ -73,7 +73,7 @@ function install_nexus_cli() {
 function run_node() {
     read -rp "Enter NODE_ID: " NODE_ID
     [ -z "$NODE_ID" ] && echo "NODE_ID cannot be empty." && sleep 2 && return
-    screen -dmS nexus-${NODE_ID} bash -c "nexus-network start --node-id $NODE_ID && exec bash"
+    screen -dmS nexus-${NODE_ID} bash -c "nexus start --node-id $NODE_ID && exec bash"
     echo -e "${GREEN}Node $NODE_ID started in screen session: screen -r nexus-${NODE_ID}${RESET}"
     sleep 2
 }

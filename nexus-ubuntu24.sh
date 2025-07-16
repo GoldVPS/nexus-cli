@@ -36,13 +36,37 @@ function install_dependencies() {
 }
 
 # === Install Nexus CLI if not already present ===
+# === Install Nexus CLI from Source ===
 function install_nexus_cli() {
-    if [ ! -f "$HOME/.nexus/bin/nexus-network" ]; then
-        echo -e "${YELLOW}Installing Nexus CLI...${RESET}"
-        curl -sSL https://cli.nexus.xyz/ | sh || echo -e "${RED}Failed to install via script, please update manually later.${RESET}"
+    if [ -f "/usr/local/bin/nexus" ]; then
+        echo -e "${GREEN}Nexus CLI already installed.${RESET}"
+        return
     fi
-    export PATH="$HOME/.nexus/bin:$PATH"
-    echo 'export PATH="$HOME/.nexus/bin:$PATH"' >> ~/.bashrc
+
+    echo -e "${YELLOW}Installing Nexus CLI from source...${RESET}"
+
+    # Install Rust if not exists
+    if ! command -v cargo &> /dev/null; then
+        echo -e "${YELLOW}Installing Rust...${RESET}"
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+        source "$HOME/.cargo/env"
+    fi
+
+    # Install build tools
+    apt install -y build-essential pkg-config libssl-dev libclang-dev cmake
+
+    # Clone & build from source
+    rm -rf /root/nexus-cli
+    git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli
+    cd /root/nexus-cli/clients/cli || {
+        echo -e "${RED}Failed to access source directory.${RESET}"
+        return
+    }
+
+    cargo build --release
+    cp target/release/nexus-network /usr/local/bin/nexus
+
+    echo -e "${GREEN}✅ Nexus CLI successfully installed from source.${RESET}"
 }
 
 # === Run Node ===

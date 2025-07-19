@@ -35,7 +35,6 @@ function install_dependencies() {
     apt install -y curl screen git build-essential pkg-config libssl-dev libclang-dev cmake
 }
 
-# === Install Nexus CLI if not already present ===
 # === Install Nexus CLI from Source ===
 function install_nexus_cli() {
     if [ -f "/usr/local/bin/nexus" ]; then
@@ -80,55 +79,63 @@ function run_node() {
 
 # === Update Nexus CLI ===
 update_cli() {
-  echo -e "\nUpdating Nexus CLI from source...\n"
+  echo -e "\n${YELLOW}Updating Nexus CLI from source...${RESET}"
   sleep 1
 
-  # Ambil semua node id dari nama screen nexus-
+  # Ambil semua node id dari screen session nexus-
   active_nodes=$(screen -ls | grep nexus- | awk -F'nexus-' '{print $2}' | awk '{print $1}')
 
-  # Unset legacy CLI install from ~/.nexus if exists
+  # Unset legacy ~/.nexus CLI
   rm -rf ~/.nexus
   sed -i '/.nexus\/bin/d' ~/.bashrc
 
-  # Cek dan install Rust kalau belum ada
+  # Install Rust kalau belum ada
   if ! command -v cargo &> /dev/null; then
-    echo "Rust belum terinstall. Menginstall Rust..."
+    echo -e "${YELLOW}Rust belum terinstall. Menginstall Rust...${RESET}"
     curl https://sh.rustup.rs -sSf | sh -s -- -y
     source "$HOME/.cargo/env"
   fi
 
-  # Install deps tambahan buat build Rust
+  # Install dependencies build
   apt install -y build-essential pkg-config libssl-dev libclang-dev cmake
 
-  # Hapus repo lama jika ada
-  rm -rf /root/nexus-cli
+  # Stop all screen nodes
+  for s in $(screen -ls | grep nexus- | awk '{print $1}'); do
+    screen -S "$s" -X quit
+  done
+  sleep 2
+  pkill -f "nexus start" 2>/dev/null || true
 
-  # Clone repo dan build ulang
-  cd /root || exit
-  git clone https://github.com/nexus-xyz/nexus-cli.git
-  cd nexus-cli/clients/cli || exit
+  # Hapus repo lama dan clone ulang
+  rm -rf /root/nexus-cli
+  git clone https://github.com/nexus-xyz/nexus-cli.git /root/nexus-cli
+  cd /root/nexus-cli/clients/cli || {
+    echo -e "${RED}❌ Gagal masuk ke direktori CLI source.${RESET}"
+    return
+  }
+
+  # Build dari source
+  echo -e "${YELLOW}Building Nexus CLI...${RESET}"
   cargo build --release
 
-  # Copy hasil build ke /usr/local/bin agar bisa dipanggil global
+  # Backup & replace binary
+  mv /usr/local/bin/nexus /usr/local/bin/nexus.old 2>/dev/null || true
   cp target/release/nexus-network /usr/local/bin/nexus
+  chmod +x /usr/local/bin/nexus
 
-  # Kembali ke direktori awal
   cd ~
+  echo -e "\n${GREEN}✅ Nexus CLI berhasil diupdate & diinstall dari source.${RESET}\n"
 
-  echo -e "\n✅ Nexus CLI berhasil diupdate dan dibuild dari source.\n"
-
+  # Tanya user, mau restart node?
   read -p "Ingin otomatis restart node yang aktif? (Y/n): " restart_choice
   if [[ "$restart_choice" =~ ^[Yy]$ || -z "$restart_choice" ]]; then
     echo -e "\n🔁 Restarting previously active nodes..."
-    for s in $(screen -ls | grep nexus- | awk '{print $1}'); do
-      screen -S "$s" -X quit
-    done
     for id in $active_nodes; do
       screen -dmS nexus-${id} bash -c "nexus start --node-id $id && exec bash"
-      echo "✅ Node $id restarted."
+      echo -e "${GREEN}✅ Node $id restarted.${RESET}"
     done
   else
-    echo -e "\n⚠️  Selesai update. Jika sebelumnya ada node aktif, silakan jalankan ulang via menu 1."
+    echo -e "\n⚠️  ${YELLOW}Selesai update. Silakan jalankan node manual via menu 1 jika dibutuhkan.${RESET}"
   fi
 }
 

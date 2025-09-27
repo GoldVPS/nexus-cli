@@ -2,10 +2,10 @@
 set -e
 
 # === Config ===
-BIN="/usr/local/bin/nexus"          # binary nexus (path absolut)
-LOG_DIR="/root/nexus_logs"          # direktori log
-DB_FILE="/root/nexus_nodes.db"      # daftar ID yg dimonitor watchdog
-SELF_PATH="/usr/local/sbin/nexus-manager.sh"  # untuk service systemd
+BIN="/usr/local/bin/nexus"              # binary nexus (path absolut)
+LOG_DIR="/root/nexus_logs"              # direktori log
+DB_FILE="/root/nexus_nodes.db"          # daftar ID dimonitor watchdog
+SELF_PATH="/usr/local/sbin/nexus-manager.sh"  # path tetap utk systemd
 
 # === Colors ===
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; RESET='\033[0m'
@@ -32,11 +32,8 @@ have_screen(){ command -v screen >/dev/null 2>&1; }
 require_bin(){ [ -x "$BIN" ] || { echo -e "${RED}Binary tidak ditemukan: $BIN${RESET}"; exit 1; }; }
 sess_exists(){ screen -ls | awk '{print $1}' | grep -qxE '[0-9]+\.'nexus-"$1"; }
 
-# String → token unik per baris
 normalize_ids_from_string(){ tr -d '\r' | tr ',;' ' ' | tr -s ' ' | sed 's/^ *//;s/ *$//' | awk '{for(i=1;i<=NF;i++) print $i}' | sed '/^$/d' | sort -u; }
-# File → token unik per baris (support # komentar)
 normalize_ids_from_file(){ tr -d '\r' <"$1" | sed 's/#.*$//' | tr ',;' ' ' | tr '\n' ' ' | tr -s ' ' | sed 's/^ *//;s/ *$//' | awk '{for(i=1;i<=NF;i++) print $i}' | sed '/^$/d' | sort -u; }
-
 add_ids_to_db(){ (cat "$DB_FILE"; printf "%s\n" "$@") | sed '/^$/d' | sort -u > "${DB_FILE}.tmp" && mv "${DB_FILE}.tmp" "$DB_FILE"; }
 
 # === Start/Stop ===
@@ -54,7 +51,7 @@ start_node(){
     echo -e "${RED}!! Gagal membuat screen untuk $id${RESET}"
     echo '[start_node] screen create failed' >>"$LOG_DIR/nexus_${id}.log"
   fi
-  sleep 0.15
+  sleep 0.20
 }
 
 stop_all_nodes(){
@@ -112,19 +109,45 @@ run_nodes(){
   mapfile -t IDS < <(echo "$RAW" | normalize_ids_from_string)
   [ "${#IDS[@]}" -eq 0 ] && { echo -e "${RED}NODE_ID kosong.${RESET}"; sleep 2; return; }
   ensure_env; require_bin; have_screen || { echo "screen not found"; return; }
+
   local count=0
-  for id in "${IDS[@]}"; do [[ "$id" =~ ^[0-9]+$ ]] && start_node "$id" || echo -e "${YELLOW}Lewati ${id}${RESET} (bukan angka)"; ((count++)); (( count%10==0 )) && sleep 1; done
-  add_ids_to_db "${IDS[@]}"; echo -e "${GREEN}Selesai.${RESET}  Attach: ${YELLOW}screen -r nexus-<ID>${RESET}"; sleep 2
+  for id in "${IDS[@]}"; do
+    if [[ "$id" =~ ^[0-9]+$ ]]; then
+      start_node "$id"
+    else
+      echo -e "${YELLOW}Lewati ${id}${RESET} (bukan angka)"
+    fi
+    : $((count+=1))                         # ← aman utk set -e
+    if (( count % 10 == 0 )); then sleep 1; fi
+  done
+
+  add_ids_to_db "${IDS[@]}"
+  echo -e "${GREEN}Selesai.${RESET}  Attach: ${YELLOW}screen -r nexus-<ID>${RESET}"
+  sleep 2
 }
+
 run_nodes_from_file(){
   read -rp "File path (default: /root/node_ids.txt): " FILE; FILE=${FILE:-/root/node_ids.txt}
   [ ! -f "$FILE" ] && { echo -e "${RED}File tidak ditemukan: $FILE${RESET}"; sleep 2; return; }
   mapfile -t IDS < <(normalize_ids_from_file "$FILE")
-  [ "${#IDS[@]}" -eq 0 ] && { echo -e "${RED}Tidak ada ID valid.${RESET}"; sleep 2; return; }
+  [ "${#IDS[@]}" -eq 0 ] && { echo -e "${RED}Tidak ada NODE_ID valid.${RESET}"; sleep 2; return; }
   ensure_env; require_bin; have_screen || { echo "screen not found"; return; }
+
   echo -e "${YELLOW}Total kandidat:${RESET} ${#IDS[@]}"
-  local count=0; for id in "${IDS[@]}"; do [[ "$id" =~ ^[0-9]+$ ]] && start_node "$id" || echo -e "${YELLOW}Lewati ${id}${RESET} (bukan angka)"; ((count++)); (( count%10==0 )) && sleep 1; done
-  add_ids_to_db "${IDS[@]}"; echo -e "${GREEN}Batch selesai.${RESET}  Log dir: ${YELLOW}$LOG_DIR${RESET}"; sleep 2
+  local count=0
+  for id in "${IDS[@]}"; do
+    if [[ "$id" =~ ^[0-9]+$ ]]; then
+      start_node "$id"
+    else
+      echo -e "${YELLOW}Lewati ${id}${RESET} (bukan angka)"
+    fi
+    : $((count+=1))                         # ← aman utk set -e
+    if (( count % 10 == 0 )); then sleep 1; fi
+  done
+
+  add_ids_to_db "${IDS[@]}"
+  echo -e "${GREEN}Batch selesai.${RESET}  Log dir: ${YELLOW}$LOG_DIR${RESET}"
+  sleep 2
 }
 
 # === Watchdog (Auto-Restart) ===
@@ -140,7 +163,6 @@ watchdog_loop(){
 }
 install_watchdog_service(){
   ensure_env
-  # Pastikan script ada di path tetap utk systemd
   [ "$0" != "$SELF_PATH" ] && { cp "$0" "$SELF_PATH"; chmod +x "$SELF_PATH"; }
   cat >/etc/systemd/system/nexus-watchdog.service <<EOF
 [Unit]
@@ -167,7 +189,7 @@ EOF
 disable_watchdog_service(){ systemctl disable --now nexus-watchdog.service 2>/dev/null || true; echo -e "${YELLOW}Auto-restart dimatikan.${RESET}"; }
 status_watchdog_service(){ systemctl status --no-pager --lines=20 nexus-watchdog.service 2>/dev/null || echo "Service tidak ada."; }
 
-# === View Logs & Stop ===
+# === View Logs ===
 view_logs(){
   local screens; screens=$(screen -ls | grep -oE '[0-9]+\.(nexus-[0-9]+)')
   if [ -z "$screens" ]; then echo "No active node sessions."; read -p "Enter to continue..." _; return; fi
@@ -177,6 +199,11 @@ view_logs(){
 }
 
 # === Menu ===
+if [[ "$1" == "--watchdog" ]]; then
+  watchdog_loop
+  exit 0
+fi
+
 while true; do
   show_header
   echo -e "\e[38;5;220m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
@@ -206,8 +233,3 @@ while true; do
     *) echo -e "\e[31mInvalid option.\e[0m"; sleep 2 ;;
   esac
 done
-
-# === Entrypoint untuk systemd ===
-if [[ "$1" == "--watchdog" ]]; then
-  watchdog_loop
-fi
